@@ -381,6 +381,22 @@ select, .admin-card input[type=number] {
       </div>
 
       <div class="admin-card">
+        <h3>💰 Ajustar Bolsa Manualmente</h3>
+        <p style="font-size:.76rem;color:var(--sub);margin-bottom:.9rem">
+          Sobreescribe el cálculo automático (jugadores × costo). Deja en 0 para volver al cálculo dinámico.
+        </p>
+        <div style="display:flex;gap:.6rem;align-items:center;margin-bottom:.6rem">
+          <span style="font-size:.9rem;color:var(--sub)">$</span>
+          <input type="number" id="adm-pool-input" min="0" placeholder="Ej. 1500"
+            style="flex:1;padding:.65rem .9rem;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:1rem;">
+        </div>
+        <button class="btn-admin" onclick="savePrizePool()" style="background:var(--gold);color:#000;">
+          💾 Guardar bolsa
+        </button>
+        <div id="pool-msg" class="admin-msg"></div>
+      </div>
+
+      <div class="admin-card">
         <h3>📋 Resultados Capturados (<span id="res-count">0</span>)</h3>
         <div id="result-list" class="result-list">
           <div class="empty">Sin resultados aún</div>
@@ -867,6 +883,24 @@ function deleteResult(matchId) {
   }).then(r=>r.json()).then(d => {
     if (d.ok) { delete appResults[matchId]; loadAdminPanel(); renderRound(currentRound); }
   });
+}
+
+function savePrizePool() {
+  const amount = Number(document.getElementById('adm-pool-input').value);
+  const msg = document.getElementById('pool-msg');
+  fetch('/api/admin/prize-pool', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: session.pin, amount })
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      msg.className = 'admin-msg ok-msg';
+      msg.textContent = `✅ Bolsa guardada: $${d.prizePool.toLocaleString('es-MX')}`;
+      setTimeout(() => msg.textContent = '', 3000);
+    } else {
+      msg.className = 'admin-msg err-msg';
+      msg.textContent = d.error || 'Error';
+    }
+  }).catch(() => { msg.className = 'admin-msg err-msg'; msg.textContent = 'Sin conexión'; });
 }
 
 function renderResultList() {
