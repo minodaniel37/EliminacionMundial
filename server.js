@@ -10,7 +10,16 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR   = process.env.DATA_DIR   || '/data';
 const DATA_FILE  = path.join(DATA_DIR, 'quiniela_elim.json');
 const ADMIN_PIN  = process.env.ADMIN_PIN  || '2211';
-const PRIZE_POOL = Number(process.env.PRIZE_POOL || 0);  // Monto total de la bolsa
+const COST_PER_PLAYER  = Number(process.env.COST_PER_PLAYER  || 100); // Costo por jugador
+const PRIZE_POOL_FIXED = Number(process.env.PRIZE_POOL || 0);          // Override manual (si se quiere fijar)
+
+// Bolsa dinámica: jugadores_activos × COST_PER_PLAYER
+// Si se define PRIZE_POOL en variables de entorno, ese valor tiene prioridad.
+function getPrizePool() {
+  if (PRIZE_POOL_FIXED > 0) return PRIZE_POOL_FIXED;
+  const count = Object.keys(db.players).filter(n => n !== 'Admin').length;
+  return count * COST_PER_PLAYER;
+}
 
 // Bloqueo: TODOS los pronósticos se cierran aquí (antes del primer partido)
 // South Africa vs Canadá: ~6pm CDMX el 28 Jun (CDMX = UTC-6 todo el año desde 2023)
@@ -174,7 +183,9 @@ app.get('/api/state', (_, res) => {
     players,
     results: db.results,
     locked: isLocked(),
-    prizePool: PRIZE_POOL,
+    prizePool: getPrizePool(),
+    costPerPlayer: COST_PER_PLAYER,
+    playerCount: Object.keys(db.players).filter(n => n !== 'Admin').length,
     torneoInicio: TORNEO_INICIO.toISOString(),
     totalMatches: ALL_IDS.length,
   });
@@ -275,9 +286,12 @@ app.get('/api/ranking', (_, res) => {
   }
   rows.sort((a, b) => b.pts - a.pts || b.exact - a.exact || a.name.localeCompare(b.name));
   rows.forEach((r, i) => r.pos = i + 1);
+  const pool = getPrizePool();
   res.json({
-    ranking: calcPrizes(rows, PRIZE_POOL),
-    prizePool: PRIZE_POOL,
+    ranking: calcPrizes(rows, pool),
+    prizePool: pool,
+    costPerPlayer: COST_PER_PLAYER,
+    playerCount: rows.length,
     resultsCount: Object.keys(db.results).length,
     totalMatches: ALL_IDS.length,
   });
@@ -296,9 +310,10 @@ app.get('/health', (_, res) => res.json({
   ok: true, dataFile: DATA_FILE,
   exists: fs.existsSync(DATA_FILE),
   locked: isLocked(),
-  players: Object.keys(db.players).length,
+  players: Object.keys(db.players).filter(n => n !== 'Admin').length,
   results: Object.keys(db.results).length,
-  prizePool: PRIZE_POOL,
+  prizePool: getPrizePool(),
+  costPerPlayer: COST_PER_PLAYER,
   torneoInicio: TORNEO_INICIO.toISOString(),
 }));
 
@@ -310,7 +325,6 @@ app.listen(PORT, () => {
   console.log(`🏆 Quiniela Eliminatoria · Puerto ${PORT}`);
   console.log(`📁 Datos: ${DATA_FILE}`);
   console.log(`🔒 Bloqueo: ${TORNEO_INICIO.toLocaleString('es-MX')}`);
-  console.log(`💰 Bolsa: $${PRIZE_POOL}`);
-  // Advertencia si el directorio DATA_DIR tiene espacios (lección aprendida)
+  console.log(`💰 Costo por jugador: $${COST_PER_PLAYER} | Bolsa inicial: dinámica`);
   if (DATA_DIR.includes(' ')) console.warn('⚠️  ALERTA: DATA_DIR contiene espacios:', DATA_DIR);
 });
