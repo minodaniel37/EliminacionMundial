@@ -253,6 +253,17 @@ select, .admin-card input[type=number] {
   border-radius:6px; font-weight:600; white-space:nowrap;
 }
 .del-player-btn:hover { background:rgba(224,62,62,.25); }
+.detail-btn {
+  background:none; border:1px solid var(--border); color:var(--sub);
+  cursor:pointer; font-size:.72rem; padding:.25rem .6rem; border-radius:6px;
+  white-space:nowrap; transition:all .15s;
+}
+.detail-btn:hover { border-color:var(--blue); color:var(--blue); }
+.round-pills { display:flex; flex-wrap:wrap; gap:.35rem; padding:.5rem 0 .3rem; }
+.pill { font-size:.7rem; font-weight:600; padding:.2rem .55rem; border-radius:20px; border:1px solid; letter-spacing:.3px; }
+.pill-ok  { background:rgba(0,166,81,.12); color:var(--green2); border-color:rgba(0,166,81,.3); }
+.pill-mid { background:rgba(245,166,35,.1); color:var(--yellow); border-color:rgba(245,166,35,.3); }
+.pill-bad { background:rgba(224,62,62,.1);  color:var(--red);    border-color:rgba(224,62,62,.25); }
 
 /* ── MISC ────────────────────────────────────────────────────── */
 .spinner { text-align:center; padding:3rem; color:var(--sub); }
@@ -715,11 +726,20 @@ function saveAll() {
 // ─── Ranking ───────────────────────────────────────────────────────────────────
 function loadRanking() {
   fetch('/api/ranking').then(r => r.json()).then(data => {
-    const { ranking, prizePool, resultsCount, totalMatches } = data;
+    const { ranking, prizePool, costPerPlayer, playerCount, resultsCount, totalMatches } = data;
 
+    const prizeEl = document.getElementById('prize-amount');
     if (prizePool) {
-      document.getElementById('prize-amount').textContent =
-        `Bolsa total: $${prizePool.toLocaleString('es-MX')} — 1°: $${Math.round(prizePool*.7).toLocaleString()} · 2°: $${Math.round(prizePool*.2).toLocaleString()} · 3°: $${Math.round(prizePool*.1).toLocaleString()}`;
+      const breakdown = costPerPlayer && playerCount
+        ? ` (${playerCount} jugadores × $${costPerPlayer.toLocaleString('es-MX')})`
+        : '';
+      prizeEl.textContent =
+        `Bolsa total: $${prizePool.toLocaleString('es-MX')}${breakdown}` +
+        ` — 1°: $${Math.round(prizePool*.7).toLocaleString('es-MX')}` +
+        ` · 2°: $${Math.round(prizePool*.2).toLocaleString('es-MX')}` +
+        ` · 3°: $${Math.round(prizePool*.1).toLocaleString('es-MX')}`;
+    } else {
+      prizeEl.textContent = '';
     }
     document.getElementById('rank-info').textContent =
       `${resultsCount} de ${totalMatches} partidos con resultado · actualiza automático`;
@@ -879,18 +899,54 @@ function renderPlayerList() {
 
     div.innerHTML = names.map(name => {
       const pc = players[name].predCount || 0;
-      const pct = Math.round(pc / (MATCHES_CFG.length || 32) * 100);
-      const bar = `<div style="width:60px;height:3px;background:var(--bg3);border-radius:2px;display:inline-block;vertical-align:middle;margin-left:.4rem">
-        <div style="width:${pct}%;height:100%;background:var(--green);border-radius:2px"></div></div>`;
-      return `<div class="player-item">
-        <div class="player-info">
-          <span style="font-weight:600">${name}</span>
-          <span class="player-preds">${pc} pronósticos (${pct}%) ${bar}</span>
+      const total = MATCHES_CFG.length || 32;
+      const pct = Math.round(pc / total * 100);
+      const safeId = name.replace(/[^a-zA-Z0-9]/g, '_');
+      return `<div class="player-item" style="flex-direction:column; align-items:stretch; gap:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:.5rem; padding:.1rem 0;">
+          <div class="player-info">
+            <span style="font-weight:600">${name}</span>
+            <span class="player-preds">${pc}/${total} pronósticos (${pct}%)</span>
+          </div>
+          <div style="display:flex; gap:.4rem; align-items:center; flex-shrink:0;">
+            <button class="detail-btn" onclick="togglePlayerDetail('${name.replace(/'/g,"\\'")}','${safeId}')">
+              📊 Ver rondas
+            </button>
+            <button class="del-player-btn" onclick="deletePlayer('${name.replace(/'/g,"\\'")}')">🗑 Eliminar</button>
+          </div>
         </div>
-        <button class="del-player-btn" onclick="deletePlayer('${name.replace(/'/g,"\\'")}')">🗑 Eliminar</button>
+        <div id="detail-${safeId}" class="round-pills" style="display:none"></div>
       </div>`;
     }).join('');
   });
+}
+
+async function togglePlayerDetail(name, safeId) {
+  const div = document.getElementById('detail-' + safeId);
+  if (div.style.display !== 'none') { div.style.display = 'none'; return; }
+
+  div.innerHTML = '<span style="font-size:.72rem;color:var(--sub)">Cargando…</span>';
+  div.style.display = 'flex';
+
+  const r = await fetch(`/api/score/${encodeURIComponent(name)}`);
+  const data = await r.json();
+  const preds = data.preds || {};
+
+  const ROUNDS = [
+    { id:'R32', label:'16avos', total:16 },
+    { id:'R16', label:'Octavos', total:8 },
+    { id:'QF',  label:'Cuartos', total:4 },
+    { id:'SF',  label:'Semis',   total:2 },
+    { id:'TPM', label:'3er Lugar', total:1 },
+    { id:'F',   label:'Final',   total:1 },
+  ];
+
+  div.innerHTML = ROUNDS.map(({ id, label, total }) => {
+    const filled = MATCHES_CFG.filter(m => m.round === id && preds[m.id] !== undefined).length;
+    const cls = filled === total ? 'pill-ok' : filled === 0 ? 'pill-bad' : 'pill-mid';
+    const icon = filled === total ? '✓' : filled === 0 ? '✗' : '~';
+    return `<span class="pill ${cls}">${icon} ${label} ${filled}/${total}</span>`;
+  }).join('');
 }
 
 function deletePlayer(name) {
