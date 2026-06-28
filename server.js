@@ -16,6 +16,7 @@ const PRIZE_POOL_FIXED = Number(process.env.PRIZE_POOL || 0);          // Overri
 // Bolsa dinámica: jugadores_activos × COST_PER_PLAYER
 // Si se define PRIZE_POOL en variables de entorno, ese valor tiene prioridad.
 function getPrizePool() {
+  if (db && db.prizePoolOverride > 0) return db.prizePoolOverride; // override manual del admin
   if (PRIZE_POOL_FIXED > 0) return PRIZE_POOL_FIXED;
   const count = Object.keys(db.players).filter(n => n !== 'Admin').length;
   return count * COST_PER_PLAYER;
@@ -276,6 +277,17 @@ app.delete('/api/player/:name', (req, res) => {
   res.json({ ok: true, deleted: name });
 });
 
+// Ajustar bolsa manualmente (admin) — guarda override en el archivo de datos
+app.post('/api/admin/prize-pool', (req, res) => {
+  const { pin, amount } = req.body;
+  if (pin !== ADMIN_PIN) return res.status(403).json({ error: 'PIN incorrecto' });
+  const n = Number(amount);
+  if (isNaN(n) || n < 0) return res.status(400).json({ error: 'Monto inválido' });
+  db.prizePoolOverride = n > 0 ? n : null; // null = vuelve al cálculo dinámico
+  dbSave();
+  res.json({ ok: true, prizePool: getPrizePool() });
+});
+
 // Ranking con premios
 app.get('/api/ranking', (_, res) => {
   const rows = [];
@@ -328,3 +340,4 @@ app.listen(PORT, () => {
   console.log(`💰 Costo por jugador: $${COST_PER_PLAYER} | Bolsa inicial: dinámica`);
   if (DATA_DIR.includes(' ')) console.warn('⚠️  ALERTA: DATA_DIR contiene espacios:', DATA_DIR);
 });
+
