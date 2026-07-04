@@ -355,6 +355,14 @@ select, .admin-card input[type=number] {
   <div id="tab-admin" class="tab-content">
     <div class="admin-wrap">
       <div class="admin-card">
+        <h3>🔓 Control de Rondas</h3>
+        <p style="font-size:.76rem;color:var(--sub);margin-bottom:.9rem">
+          Abre una ronda para que todos capturen o corrijan su pronóstico. Ciérrala cuando arranque el primer partido de esa ronda.
+        </p>
+        <div id="round-lock-list"></div>
+      </div>
+
+      <div class="admin-card">
         <h3>⚽ Capturar Resultado Oficial</h3>
         <label style="font-size:.8rem;color:var(--sub);display:block;margin-bottom:.4rem">Partido</label>
         <select id="adm-match"></select>
@@ -434,6 +442,7 @@ const ROUND_LABELS = { R32:'16avos', R16:'Octavos', QF:'Cuartos', SF:'Semis', TP
 
 let session = null; // { name, pin, isAdmin, preds:{}, locked:false }
 let appResults = {};
+let appRoundLocks = {}; // { R32:true, R16:false, ... } true = cerrada
 let currentRound = 'R32';
 let penWinner = null;
 
@@ -473,7 +482,6 @@ function initApp() {
   fetch('/api/matches').then(r => r.json()).then(cfg => {
     MATCHES_CFG = cfg;
     MATCHES = Object.fromEntries(cfg.map(m => [m.id, m]));
-    buildRoundNav();
     loadState();
     if (session.isAdmin) loadAdminPanel();
     setInterval(autoRefresh, 30000);
@@ -483,13 +491,28 @@ function initApp() {
 function loadState() {
   fetch('/api/state').then(r => r.json()).then(st => {
     appResults = st.results || {};
+    appRoundLocks = st.roundLocks || {};
     session.locked = st.locked;
-    document.getElementById('locked-msg').style.display = st.locked ? 'block' : 'none';
-    document.getElementById('btn-save').disabled = st.locked;
-    document.getElementById('btn-save').textContent = st.locked
-      ? '🔒 Pronósticos cerrados' : '💾 Guardar simulación';
+    buildRoundNav();
     renderRound(currentRound);
+    if (session.isAdmin && document.getElementById('tab-admin').classList.contains('active')) {
+      renderRoundLockPanel();
+    }
   });
+}
+
+// Ronda cerrada = true por defecto si no hay dato (mismo criterio que el server)
+function isRoundLocked(round) { return appRoundLocks[round] !== false; }
+
+function updateLockUI(round) {
+  const locked = isRoundLocked(round);
+  const msg = document.getElementById('locked-msg');
+  msg.style.display = locked ? 'block' : 'none';
+  msg.textContent = `🔒 ${ROUND_LABELS[round]||round} está cerrada — Los marcadores son de solo lectura`;
+  const btn = document.getElementById('btn-save');
+  btn.disabled = locked;
+  btn.textContent = locked ? '🔒 Ronda cerrada' : '💾 Guardar simulación';
+  return locked;
 }
 
 function autoRefresh() {
@@ -512,9 +535,10 @@ function showTab(id, btn) {
 function buildRoundNav() {
   const nav = document.getElementById('round-nav');
   const rounds = [...new Set(MATCHES_CFG.map(m => m.round))];
-  nav.innerHTML = rounds.map(r =>
-    `<button class="round-btn${r===currentRound?' active':''}" onclick="switchRound('${r}',this)">${ROUND_LABELS[r]||r}</button>`
-  ).join('');
+  nav.innerHTML = rounds.map(r => {
+    const icon = isRoundLocked(r) ? '🔒' : '🔓';
+    return `<button class="round-btn${r===currentRound?' active':''}" onclick="switchRound('${r}',this)">${icon} ${ROUND_LABELS[r]||r}</button>`;
+  }).join('');
 }
 
 function switchRound(r, btn) {
@@ -573,6 +597,7 @@ function resolveTeam(matchId, side, depth) {
 
 // ─── Render round ──────────────────────────────────────────────────────────────
 function renderRound(round) {
+  const roundLocked = updateLockUI(round);
   const container = document.getElementById('matches-container');
   const matchesForRound = MATCHES_CFG.filter(m => m.round === round);
   if (!matchesForRound.length) { container.innerHTML='<div class="empty">Sin partidos en esta ronda.</div>'; return; }
@@ -601,7 +626,7 @@ function renderRound(round) {
       ptsBadge = `<span class="pts-badge ${cls}">${lbl}</span>`;
     }
 
-    const locked = session.locked;
+    const locked = roundLocked;
     const roAttr = locked ? ' readonly class="score-input readonly"' : ' class="score-input"';
 
     // Label de ronda
@@ -700,7 +725,7 @@ function setPen(matchId, side) {
 
 // ─── Save predictions ──────────────────────────────────────────────────────────
 function saveAll() {
-  if (session.locked) return;
+  if (isRoundLocked(currentRound)) return;
   // Recoger todos los inputs de la UI
   const allPreds = {};
   MATCHES_CFG.forEach(m => {
@@ -722,17 +747,17 @@ function saveAll() {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ name: session.name, pin: session.pin, preds: merged })
   }).then(r => r.json()).then(d => {
-    if (d.ok) {
+    if (d.ok && d.saved && d.saved.length) {
       session.preds = merged;
       btn.textContent = '✅ Guardado';
-      setTimeout(() => {
-        btn.textContent = '💾 Guardar simulación';
-        btn.disabled = false;
-        renderRound(currentRound); // re-render para actualizar bracket
-      }, 1500);
+      setTimeout(() => { renderRound(currentRound); }, 1500); // re-render actualiza texto/estado del botón
+    } else if (d.ok) {
+      // Nada se guardó (la ronda se cerró justo antes de que llegara la petición)
+      btn.textContent = '🔒 Ronda cerrada';
+      setTimeout(() => { loadState(); }, 1500);
     } else {
       btn.textContent = '❌ Error — ' + (d.error||'');
-      setTimeout(() => { btn.textContent='💾 Guardar simulación'; btn.disabled=false; }, 2000);
+      setTimeout(() => { renderRound(currentRound); }, 2000);
     }
   }).catch(() => {
     btn.textContent = '❌ Sin conexión'; btn.disabled = false;
@@ -785,7 +810,40 @@ function loadRanking() {
 }
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
+function renderRoundLockPanel() {
+  const div = document.getElementById('round-lock-list');
+  if (!div) return;
+  const rounds = [...new Set(MATCHES_CFG.map(m => m.round))];
+  div.innerHTML = rounds.map(r => {
+    const locked = isRoundLocked(r);
+    return `<div class="player-item">
+      <span style="font-weight:600">${ROUND_LABELS[r]||r}</span>
+      <button class="btn-admin" style="width:auto;padding:.4rem 1rem;font-size:.8rem;background:${locked?'var(--red)':'var(--green)'}"
+        onclick="toggleRoundLock('${r}', ${locked})">
+        ${locked ? '🔒 Cerrada — abrir' : '🔓 Abierta — cerrar'}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function toggleRoundLock(round, currentlyLocked) {
+  fetch('/api/admin/round-lock', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ pin: session.pin, round, locked: !currentlyLocked })
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      appRoundLocks[round] = d.locked;
+      renderRoundLockPanel();
+      buildRoundNav();
+      if (currentRound === round) renderRound(round);
+    } else {
+      alert('Error: ' + (d.error || ''));
+    }
+  }).catch(() => alert('Error de conexión'));
+}
+
 function loadAdminPanel() {
+  renderRoundLockPanel();
   // Poblar select de partidos
   const sel = document.getElementById('adm-match');
   sel.innerHTML = MATCHES_CFG.map(m => {
