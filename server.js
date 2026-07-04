@@ -75,19 +75,40 @@ const MATCHES_CFG = [
 
 const MATCHES = Object.fromEntries(MATCHES_CFG.map(m => [m.id, m]));
 const ALL_IDS = MATCHES_CFG.map(m => m.id);
+const ROUND_IDS = [...new Set(MATCHES_CFG.map(m => m.round))]; // ['R32','R16','QF','SF','TPM','F']
 
 // ─── Persistencia ─────────────────────────────────────────────────────────────
 let db = null;
 
 function isLocked() { return Date.now() >= TORNEO_INICIO.getTime(); }
 
+// Candado POR RONDA. Default = true (cerrada) para cualquier ronda que no
+// tenga un valor explícito guardado — así nada cambia hasta que el admin
+// abra una ronda a propósito desde el panel.
+function isRoundLocked(round) {
+  if (db.roundLocks && Object.prototype.hasOwnProperty.call(db.roundLocks, round)) {
+    return !!db.roundLocks[round];
+  }
+  return true;
+}
+
 function dbLoad() {
   try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    if (!fs.existsSync(DATA_FILE)) { db = { players: {}, results: {} }; dbSave(); return; }
+    if (!fs.existsSync(DATA_FILE)) {
+      db = { players: {}, results: {}, roundLocks: Object.fromEntries(ROUND_IDS.map(r => [r, true])) };
+      dbSave();
+      return;
+    }
     db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
     if (!db.players) db.players = {};
     if (!db.results) db.results = {};
+    if (!db.roundLocks) db.roundLocks = {};
+    let changed = false;
+    for (const r of ROUND_IDS) {
+      if (!Object.prototype.hasOwnProperty.call(db.roundLocks, r)) { db.roundLocks[r] = true; changed = true; }
+    }
+    if (changed) dbSave();
   } catch (e) {
     console.error('dbLoad error:', e.message);
     db = { players: {}, results: {} };
@@ -184,6 +205,7 @@ app.get('/api/state', (_, res) => {
     players,
     results: db.results,
     locked: isLocked(),
+    roundLocks: db.roundLocks,
     prizePool: getPrizePool(),
     costPerPlayer: COST_PER_PLAYER,
     playerCount: Object.keys(db.players).filter(n => n !== 'Admin').length,
@@ -220,25 +242,40 @@ app.post('/api/login', (req, res) => {
   return res.json({ ok: true, isAdmin: false, name, preds: {}, isNew: true });
 });
 
-// Guardar pronósticos (bulk)
+// Guardar pronósticos (bulk) — respeta el candado de CADA ronda por separado
 app.post('/api/predict', (req, res) => {
   const name  = String(req.body.name || '').trim();
   const pin   = String(req.body.pin  || '').trim();
   const preds = req.body.preds;
   if (!name || !pin || !preds) return res.status(400).json({ error: 'Datos incompletos' });
-  if (isLocked()) return res.status(403).json({ error: 'Pronósticos bloqueados. El torneo ya inició.' });
   const player = db.players[name];
   if (!player || player.pin !== pin) return res.status(401).json({ error: 'Auth fallida' });
 
+  const saved = [], skipped = [];
   for (const [id, s] of Object.entries(preds)) {
-    if (!MATCHES[id] || !Array.isArray(s) || s.length < 2) continue;
+    const m = MATCHES[id];
+    if (!m || !Array.isArray(s) || s.length < 2) continue;
+    if (isRoundLocked(m.round)) { skipped.push(id); continue; }
     const h = parseInt(s[0], 10), a = parseInt(s[1], 10);
     if (isNaN(h) || isNaN(a) || h < 0 || a < 0 || h > 20 || a > 20) continue;
     // Si hay tercer elemento (ganador en penales): s[2] = 'home'|'away'
     player.preds[id] = (s[2] && h === a) ? [h, a, s[2]] : [h, a];
+    saved.push(id);
   }
   dbSave();
-  res.json({ ok: true, predCount: Object.keys(player.preds).length });
+  res.json({ ok: true, predCount: Object.keys(player.preds).length, saved, skipped });
+});
+
+// Abrir/cerrar una ronda completa para captura de pronósticos (admin)
+app.post('/api/admin/round-lock', (req, res) => {
+  const { pin, round, locked } = req.body;
+  if (pin !== ADMIN_PIN) return res.status(403).json({ error: 'PIN incorrecto' });
+  if (!ROUND_IDS.includes(round)) return res.status(400).json({ error: 'Ronda inválida' });
+  if (!db.roundLocks) db.roundLocks = {};
+  db.roundLocks[round] = !!locked;
+  dbSave();
+  console.log(`Ronda ${round} ${db.roundLocks[round] ? 'cerrada' : 'abierta'} por admin`);
+  res.json({ ok: true, round, locked: db.roundLocks[round], roundLocks: db.roundLocks });
 });
 
 // Capturar resultado oficial (solo admin)
@@ -327,6 +364,7 @@ app.get('/health', (_, res) => res.json({
   prizePool: getPrizePool(),
   costPerPlayer: COST_PER_PLAYER,
   torneoInicio: TORNEO_INICIO.toISOString(),
+  roundLocks: db.roundLocks,
 }));
 
 // ─── Arranque ────────────────────────────────────────────────────────────────
