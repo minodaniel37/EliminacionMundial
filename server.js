@@ -51,22 +51,23 @@ const MATCHES_CFG = [
   { id:'R32_15', round:'R32', num:15, home:'Colombia',          away:'Ghana',          date:'Vie 3 Jul'  },
   { id:'R32_16', round:'R32', num:16, home:'Australia',         away:'Egipto',         date:'Vie 3 Jul'  },
   // ── Octavos (Round of 16) ────────────────────────────────────────────────
-  { id:'R16_1', round:'R16', num:1, homeFrom:'R32_1',  awayFrom:'R32_2',  date:'~6 Jul'  },
-  { id:'R16_2', round:'R16', num:2, homeFrom:'R32_3',  awayFrom:'R32_4',  date:'~6 Jul'  },
-  { id:'R16_3', round:'R16', num:3, homeFrom:'R32_5',  awayFrom:'R32_6',  date:'~7 Jul'  },
-  { id:'R16_4', round:'R16', num:4, homeFrom:'R32_7',  awayFrom:'R32_8',  date:'~7 Jul'  },
-  { id:'R16_5', round:'R16', num:5, homeFrom:'R32_9',  awayFrom:'R32_10', date:'~8 Jul'  },
-  { id:'R16_6', round:'R16', num:6, homeFrom:'R32_11', awayFrom:'R32_12', date:'~8 Jul'  },
-  { id:'R16_7', round:'R16', num:7, homeFrom:'R32_13', awayFrom:'R32_14', date:'~9 Jul'  },
-  { id:'R16_8', round:'R16', num:8, homeFrom:'R32_15', awayFrom:'R32_16', date:'~9 Jul'  },
-  // ── Cuartos (Quarterfinals) ──────────────────────────────────────────────
-  { id:'QF_1', round:'QF', num:1, homeFrom:'R16_1', awayFrom:'R16_2', date:'~11 Jul' },
-  { id:'QF_2', round:'QF', num:2, homeFrom:'R16_3', awayFrom:'R16_4', date:'~11 Jul' },
-  { id:'QF_3', round:'QF', num:3, homeFrom:'R16_5', awayFrom:'R16_6', date:'~12 Jul' },
-  { id:'QF_4', round:'QF', num:4, homeFrom:'R16_7', awayFrom:'R16_8', date:'~12 Jul' },
+  // ── Octavos (Round of 16) — cruces oficiales confirmados ──────────────────
+  { id:'R16_1', round:'R16', num:1, homeFrom:'R32_1',  awayFrom:'R32_3',  date:'Sáb 4 Jul' }, // Canadá vs Marruecos
+  { id:'R16_2', round:'R16', num:2, homeFrom:'R32_2',  awayFrom:'R32_5',  date:'Sáb 4 Jul' }, // Paraguay vs Francia
+  { id:'R16_3', round:'R16', num:3, homeFrom:'R32_4',  awayFrom:'R32_6',  date:'Dom 5 Jul' }, // Brasil vs Noruega
+  { id:'R16_4', round:'R16', num:4, homeFrom:'R32_7',  awayFrom:'R32_8',  date:'Dom 5 Jul' }, // México vs Inglaterra
+  { id:'R16_5', round:'R16', num:5, homeFrom:'R32_11', awayFrom:'R32_12', date:'Lun 6 Jul' }, // Portugal vs España
+  { id:'R16_6', round:'R16', num:6, homeFrom:'R32_9',  awayFrom:'R32_10', date:'Lun 6 Jul' }, // EUA vs Bélgica
+  { id:'R16_7', round:'R16', num:7, homeFrom:'R32_14', awayFrom:'R32_16', date:'Mar 7 Jul' }, // Argentina vs Egipto
+  { id:'R16_8', round:'R16', num:8, homeFrom:'R32_13', awayFrom:'R32_15', date:'Mar 7 Jul' }, // Suiza vs Colombia
+  // ── Cuartos (Quarterfinals) — cruces oficiales confirmados ─────────────────
+  { id:'QF_1', round:'QF', num:1, homeFrom:'R16_1', awayFrom:'R16_2', date:'~9 Jul'  }, // (Canadá/Marruecos) vs (Paraguay/Francia)
+  { id:'QF_2', round:'QF', num:2, homeFrom:'R16_5', awayFrom:'R16_6', date:'~10 Jul' }, // (Portugal/España) vs (EUA/Bélgica)
+  { id:'QF_3', round:'QF', num:3, homeFrom:'R16_3', awayFrom:'R16_4', date:'~11 Jul' }, // (Brasil/Noruega) vs (México/Inglaterra)
+  { id:'QF_4', round:'QF', num:4, homeFrom:'R16_7', awayFrom:'R16_8', date:'~11 Jul' }, // (Argentina/Egipto) vs (Suiza/Colombia)
   // ── Semis (Semifinals) ───────────────────────────────────────────────────
-  { id:'SF_1', round:'SF', num:1, homeFrom:'QF_1', awayFrom:'QF_2', date:'~15 Jul' },
-  { id:'SF_2', round:'SF', num:2, homeFrom:'QF_3', awayFrom:'QF_4', date:'~16 Jul' },
+  { id:'SF_1', round:'SF', num:1, homeFrom:'QF_1', awayFrom:'QF_2', date:'~14 Jul' },
+  { id:'SF_2', round:'SF', num:2, homeFrom:'QF_3', awayFrom:'QF_4', date:'~15 Jul' },
   // ── Tercer lugar ─────────────────────────────────────────────────────────
   { id:'TPM',  round:'TPM', num:1, homeFrom:'SF_1_L', awayFrom:'SF_2_L', date:'18 Jul' },
   // ── Final ────────────────────────────────────────────────────────────────
