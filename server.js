@@ -162,24 +162,23 @@ function calcPrizes(ranking, pool) {
   const result = ranking.map(r => ({ ...r, prize: 0 }));
   if (!pool) return result;
 
-  let pIdx = 0; // slot de premio
+  let pIdx = 0; // lugar de premio (0=1°, 1=2°, 2=3°)
   let rIdx = 0; // índice en ranking
 
   while (rIdx < result.length && pIdx < ALLOCS.length) {
-    const { pts, exact } = result[rIdx];
-    // Grupo de empatados
+    const { pts } = result[rIdx];
+    // Grupo de empatados — el criterio de empate es SOLO puntos
     const group = [];
     let i = rIdx;
-    while (i < result.length && result[i].pts === pts && result[i].exact === exact) {
+    while (i < result.length && result[i].pts === pts) {
       group.push(i); i++;
     }
-    // Slots de premio que consume este grupo
-    const slots = Math.min(group.length, ALLOCS.length - pIdx);
-    let money = 0;
-    for (let k = 0; k < slots; k++) money += pool * ALLOCS[pIdx + k];
+    // Cada grupo (sin importar cuántos jugadores lo integren) consume
+    // exactamente UN lugar de premio; el % de ese lugar se reparte entre todos.
+    const money = pool * ALLOCS[pIdx];
     const each = Math.round(money / group.length);
     group.forEach(gi => { result[gi].prize = each; });
-    pIdx += slots;
+    pIdx += 1;
     rIdx += group.length;
   }
   return result;
@@ -334,7 +333,11 @@ app.get('/api/ranking', (_, res) => {
     rows.push({ name, pts, exact, predCount: Object.keys(d.preds || {}).length });
   }
   rows.sort((a, b) => b.pts - a.pts || b.exact - a.exact || a.name.localeCompare(b.name));
-  rows.forEach((r, i) => r.pos = i + 1);
+  let denseRank = 0, lastPts = null;
+  rows.forEach(r => {
+    if (r.pts !== lastPts) { denseRank++; lastPts = r.pts; }
+    r.pos = denseRank;
+  });
   const pool = getPrizePool();
   res.json({
     ranking: calcPrizes(rows, pool),
