@@ -847,8 +847,8 @@ function loadAdminPanel() {
   // Poblar select de partidos
   const sel = document.getElementById('adm-match');
   sel.innerHTML = MATCHES_CFG.map(m => {
-    const hTeam = m.round==='R32' ? m.home : `G.${m.homeFrom}`;
-    const aTeam = m.round==='R32' ? m.away : `G.${m.awayFrom}`;
+    const hTeam = m.round==='R32' ? m.home : resolveTeamAdmin(m.id,'home');
+    const aTeam = m.round==='R32' ? m.away : resolveTeamAdmin(m.id,'away');
     const done  = appResults[m.id] ? ` ✓(${appResults[m.id][0]}-${appResults[m.id][1]})` : '';
     return `<option value="${m.id}">[${ROUND_LABELS[m.round]}] ${hTeam} vs ${aTeam}${done}</option>`;
   }).join('');
